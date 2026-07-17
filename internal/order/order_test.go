@@ -1,6 +1,8 @@
 package order
 
 import (
+	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -84,5 +86,221 @@ func TestNewOrderSuccess(t *testing.T) {
 	if result.Items[0].ProductID != "8539" {
 		t.Errorf("ожидалось 8539 у первой позиции, %v", result.Items[0].ProductID)
 	}
+}
 
+type testCase struct {
+	name       string
+	id         string
+	customerID string
+	currency   string
+	orderItems []OrderItem
+	err        error
+}
+
+func TestNewOrderValidation(t *testing.T) {
+	cases := []testCase{
+		testCase{
+			name:       "id только из пробелов",
+			id:         " ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: 82742,
+					Quantity:  423,
+				},
+			},
+			err: ErrOrderIDRequired,
+		},
+		testCase{
+			name:       "customer id только из пробелов",
+			id:         " 87",
+			customerID: " ",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: 82742,
+					Quantity:  423,
+				},
+			},
+			err: ErrCustomerIDRequired,
+		},
+		testCase{
+			name:       "currency только из пробелов",
+			id:         "78 ",
+			customerID: "64",
+			currency:   " ",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: 82742,
+					Quantity:  423,
+				},
+			},
+			err: ErrCurrencyRequired,
+		},
+		testCase{
+			name:       "слайс позиций пустой",
+			id:         " 67",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{},
+			err:        ErrItemsRequired,
+		},
+
+		testCase{
+			name:       "product id пустой",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "",
+					Name:      "hvgfk",
+					UnitPrice: 82742,
+					Quantity:  423,
+				},
+			},
+			err: ErrProductIDRequired,
+		},
+
+		testCase{
+			name:       "name пустой",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "",
+					UnitPrice: 82742,
+					Quantity:  423,
+				},
+			},
+			err: ErrProductNameRequired,
+		},
+		testCase{
+			name:       "unitPrice нулевой",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: 0,
+					Quantity:  423,
+				},
+			},
+			err: ErrUnitPriceInvalid,
+		},
+
+		testCase{
+			name:       "unitPrice меньше нуля",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: -1,
+					Quantity:  423,
+				},
+			},
+			err: ErrUnitPriceInvalid,
+		},
+
+		testCase{
+			name:       "quantity нулевой",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: 82742,
+					Quantity:  0,
+				},
+			},
+			err: ErrQuantityInvalid,
+		},
+
+		testCase{
+			name:       "quantity меньше нуля",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: 82742,
+					Quantity:  -1,
+				},
+			},
+			err: ErrQuantityInvalid,
+		},
+
+		testCase{
+			name:       "умножение цены на колво переполнено",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: math.MaxInt64,
+					Quantity:  2,
+				},
+			},
+			err: ErrTotalAmountOverflow,
+		},
+
+		testCase{
+			name:       "общая сумма при сложении переполнена",
+			id:         "78 ",
+			customerID: "64",
+			currency:   "RUB",
+			orderItems: []OrderItem{
+				{
+					ProductID: "r8r",
+					Name:      "hvgfk",
+					UnitPrice: math.MaxInt64,
+					Quantity:  1,
+				},
+				{
+					ProductID: "r3vu",
+					Name:      "hvgffbk",
+					UnitPrice: 82742,
+					Quantity:  1,
+				},
+			},
+			err: ErrTotalAmountOverflow,
+		},
+	}
+	now := time.Date(2026, 8, 16, 18, 1, 0, 0, time.UTC)
+	for _, caseN := range cases {
+		t.Run(caseN.name, func(t *testing.T) {
+			order, err := NewOrder(caseN.id, caseN.customerID, caseN.currency, caseN.orderItems, now)
+			if err == nil {
+				t.Fatal("ожидалась ошибка, вернулся нил")
+			}
+			if !errors.Is(err, caseN.err) {
+				t.Errorf("ожидали: %v, получили:%v ", caseN.err, err)
+			}
+			if order != nil {
+				t.Error("некорректный заказ был создан")
+			}
+
+		})
+
+	}
 }
