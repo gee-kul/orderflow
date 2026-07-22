@@ -70,3 +70,33 @@ func NewOrder(id string, customerID string, currency string,
 
 	return oneOrder, nil
 }
+
+func (o *Order) ChangeStatus(newStatus Status, tm time.Time) error {
+	switch o.Status {
+	case StatusCreated:
+		if newStatus != StatusConfirmed && newStatus != StatusCancelled {
+			return ErrStatusTransition
+		}
+	case StatusConfirmed:
+		if newStatus != StatusProcessing && newStatus != StatusCancelled {
+			return ErrStatusTransition
+		}
+	case StatusCompleted:
+		return ErrStatusTransition
+	case StatusCancelled:
+		return ErrStatusTransition
+	case StatusProcessing:
+		if newStatus != StatusShipped && newStatus != StatusCancelled {
+			return ErrStatusTransition
+		}
+	case StatusShipped:
+		if newStatus != StatusCompleted {
+			return ErrStatusTransition
+		}
+	default:
+		return ErrStatusTransition
+	}
+	o.Status = newStatus
+	o.UpdatedAt = tm
+	return nil
+}

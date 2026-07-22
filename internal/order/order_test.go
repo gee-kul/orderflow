@@ -304,3 +304,43 @@ func TestNewOrderValidation(t *testing.T) {
 
 	}
 }
+
+func TestOrderChangeStatusAllowed(t *testing.T){
+	createdAt := time.Date(2026, 8, 16, 18, 1, 0, 0, time.UTC)
+	changedAt := time.Date(2026, 8, 16, 18, 2, 0, 0, time.UTC)
+	order := &Order{Status: StatusCreated, CreatedAt: createdAt, UpdatedAt: createdAt}
+
+	err := order.ChangeStatus(StatusConfirmed, changedAt)
+	if err != nil{
+		t.Fatalf("ошибка в смене статуса: %v", err)
+	}
+	if order.Status != StatusConfirmed{
+		t.Errorf("статус не confirmed: %v", order.Status)
+	}
+	if !order.UpdatedAt.Equal(changedAt){
+		t.Errorf("время апдейта неправильное: %v", order.UpdatedAt)
+	}
+	if !order.CreatedAt.Equal(createdAt){
+		t.Errorf("время криейта не правильное: %v", order.CreatedAt)
+	}
+}
+
+func TestOrderChangeStatusNotAllowed(t *testing.T){
+	createdAt := time.Date(2026, 8, 16, 18, 1, 0, 0, time.UTC)
+	changedAt := time.Date(2026, 8, 16, 18, 2, 0, 0, time.UTC)
+	order := &Order{Status: StatusCreated, CreatedAt: createdAt, UpdatedAt: createdAt}
+
+	err := order.ChangeStatus(StatusShipped, changedAt)
+	if !errors.Is(err, ErrStatusTransition) {
+		t.Errorf("ожидали: %v, получили:%v ", ErrStatusTransition, err)
+	}
+	if order.Status != StatusCreated{
+		t.Errorf("должен быть status created: %v", order.Status)
+	}
+	if !order.UpdatedAt.Equal(createdAt){
+		t.Errorf("время апдейта неправильное: %v", order.UpdatedAt)
+	}
+	if !order.CreatedAt.Equal(createdAt){
+		t.Errorf("время криейта не правильное: %v", order.CreatedAt)
+	}
+}

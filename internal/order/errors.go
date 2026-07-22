@@ -12,4 +12,5 @@ var (
 	ErrUnitPriceInvalid    = errors.New("unit price is invalid")
 	ErrQuantityInvalid     = errors.New("quantity is invalid")
 	ErrTotalAmountOverflow = errors.New("total amount overflow")
+	ErrStatusTransition    = errors.New("status transition is not allowed")
 )
