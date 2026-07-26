@@ -1,9 +1,9 @@
 package order
 
 import (
-	"time"
-
+	"context"
 	"github.com/google/uuid"
+	"time"
 )
 
 type CreateOrderInput struct {
@@ -22,15 +22,15 @@ func NewOrderService(repository OrderRepository) *OrderService {
 	return &ord
 }
 
-func (o *OrderService) FindOrderByID(id string) (Order, error) {
-	ord, err := o.rep.FindByID(id)
+func (o *OrderService) FindOrderByID(ctx context.Context, id string) (Order, error) {
+	ord, err := o.rep.FindByID(ctx, id)
 	if err != nil {
 		return Order{}, err
 	}
 	return ord, nil
 }
 
-func (o *OrderService) CreateOrder(customerID string, input CreateOrderInput) (*Order, error) {
+func (o *OrderService) CreateOrder(ctx context.Context, customerID string, input CreateOrderInput) (*Order, error) {
 	orderID := uuid.NewString()
 	now := time.Now()
 
@@ -38,7 +38,7 @@ func (o *OrderService) CreateOrder(customerID string, input CreateOrderInput) (*
 	if err != nil {
 		return nil, err
 	}
-	err = o.rep.Save(*order)
+	err = o.rep.Save(ctx, *order)
 	if err != nil {
 		return nil, err
 	}
