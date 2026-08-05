@@ -1,6 +1,7 @@
 package order
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -11,13 +12,13 @@ type fakeRepository struct {
 	saveCalled bool
 }
 
-func (r *fakeRepository) Save(order Order) error {
+func (r *fakeRepository) Save(ctx context.Context, order Order) error {
 	r.ord = order
 	r.saveCalled = true
 	return r.saveErr
 }
 
-func (r *fakeRepository) FindByID(id string) (Order, error) {
+func (r *fakeRepository) FindByID(ctx context.Context, id string) (Order, error) {
 	return Order{}, nil
 }
 
@@ -28,7 +29,7 @@ func TestOrderServiceCreateOrderSuccess(t *testing.T) {
 	item := OrderItem{ProductID: "order-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
 	input := CreateOrderInput{Currency: "RUB", Items: []OrderItem{item}}
 
-	order, err := service.CreateOrder("1", input)
+	order, err := service.CreateOrder(context.Background(), "1", input)
 	if err != nil {
 		t.Fatalf("ошибка создания заказа: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestOrderServiceCreateOrderSaveError(t *testing.T) {
 	item := OrderItem{ProductID: "order-2", Name: "bruh", UnitPrice: 100500, Quantity: 1}
 	input := CreateOrderInput{Currency: "RUB", Items: []OrderItem{item}}
 
-	order, err := service.CreateOrder("2", input)
+	order, err := service.CreateOrder(context.Background(), "2", input)
 	if order != nil {
 		t.Errorf("ожидали пустой заказ: %v", order)
 	}
@@ -74,7 +75,7 @@ func TestOrderServiceCreateOrderValidationError(t *testing.T) {
 	item := OrderItem{ProductID: "order-2", Name: "bruh", UnitPrice: 100500, Quantity: 1}
 	input := CreateOrderInput{Currency: "RUB", Items: []OrderItem{item}}
 
-	order, err := service.CreateOrder("", input)
+	order, err := service.CreateOrder(context.Background(), "", input)
 	if order != nil {
 		t.Errorf("ожидали пустой заказ: %v", order)
 	}

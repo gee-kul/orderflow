@@ -1,6 +1,8 @@
 package order
 
+import "context"
+
 type OrderRepository interface {
-	Save(order Order) error
-	FindByID(id string) (Order, error)
+	Save(ctx context.Context, order Order) error
+	FindByID(ctx context.Context, id string) (Order, error)
 }

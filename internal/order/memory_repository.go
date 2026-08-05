@@ -1,6 +1,9 @@
 package order
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type MemoryOrderRepository struct {
 	orders map[string]Order
@@ -14,16 +17,28 @@ func NewMemoryOrderRepository() *MemoryOrderRepository {
 	return &memoryOrder
 }
 
-func (r *MemoryOrderRepository) Save(order Order) error {
+func (r *MemoryOrderRepository) Save(ctx context.Context, order Order) error {
+	err := ctx.Err()
+	if err != nil {
+		return err
+	}
+
+	copyOrder := order
+	copyOrder.Items = make([]OrderItem, len(order.Items))
+	copy(copyOrder.Items, order.Items)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.orders[order.ID] = order
+	r.orders[order.ID] = copyOrder
 
 	return nil
 }
 
-func (r *MemoryOrderRepository) FindByID(id string) (Order, error) {
+func (r *MemoryOrderRepository) FindByID(ctx context.Context, id string) (Order, error) {
+	err := ctx.Err()
+	if err != nil {
+		return Order{}, err
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -31,5 +46,8 @@ func (r *MemoryOrderRepository) FindByID(id string) (Order, error) {
 	if !ok {
 		return Order{}, ErrOrderNotFound
 	}
-	return v, nil
+	copyV := v
+	copyV.Items = make([]OrderItem, len(v.Items))
+	copy(copyV.Items, v.Items)
+	return copyV, nil
 }
