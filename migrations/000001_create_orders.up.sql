@@ -10,10 +10,11 @@ CREATE TABLE orders(
 
 CREATE TABLE order_items(
     order_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
     product_id TEXT NOT NULL,
     name TEXT NOT NULL,
     unit_price BIGINT NOT NULL,
     quantity INTEGER NOT NULL,
-    PRIMARY KEY(order_id, product_id),
+    PRIMARY KEY(order_id, position),
     FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
 );
