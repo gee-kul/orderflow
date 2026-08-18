@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gee-kul/orderflow/internal/outbox"
+	"github.com/gee-kul/orderflow/internal/event"
 	"github.com/google/uuid"
 )
 
@@ -24,7 +24,7 @@ type OrderCreatedPayload struct {
 	CreatedAt   time.Time          `json:"created_at"`
 }
 
-func NewOrderCreatedEvent(order Order) (outbox.Event, error) {
+func NewOrderCreatedEvent(order Order) (event.Event, error) {
 	items := make([]OrderCreatedItem, len(order.Items))
 
 	for i, item := range order.Items {
@@ -38,10 +38,10 @@ func NewOrderCreatedEvent(order Order) (outbox.Event, error) {
 
 	payloadEncod, err := json.Marshal(payload)
 	if err != nil {
-		return outbox.Event{}, err
+		return event.Event{}, err
 	}
 
-	event := outbox.Event{ID: uuid.NewString(), AggregateType: "order", AggregateID: order.ID,
+	event := event.Event{ID: uuid.NewString(), AggregateType: "order", AggregateID: order.ID,
 		EventType: "order.created", Payload: payloadEncod, CreatedAt: order.CreatedAt, PublishedAt: nil}
 
 	return event, nil

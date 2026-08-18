@@ -2,8 +2,9 @@ package order
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type CreateOrderInput struct {
@@ -12,12 +13,14 @@ type CreateOrderInput struct {
 }
 
 type OrderService struct {
-	rep OrderRepository
+	rep   OrderRepository
+	eventSaver OrderEventSaver
 }
 
-func NewOrderService(repository OrderRepository) *OrderService {
+func NewOrderService(repository OrderRepository, event OrderEventSaver) *OrderService {
 	var ord OrderService
 	ord.rep = repository
+	ord.eventSaver = event
 
 	return &ord
 }
@@ -38,9 +41,16 @@ func (o *OrderService) CreateOrder(ctx context.Context, customerID string, input
 	if err != nil {
 		return nil, err
 	}
-	err = o.rep.Save(ctx, *order)
+
+	event, err := NewOrderCreatedEvent(*order)
 	if err != nil {
 		return nil, err
 	}
+
+	err = o.eventSaver.SaveWithEvent(ctx, *order, event)
+	if err != nil {
+		return nil, err
+	}
+
 	return order, nil
 }
