@@ -4,17 +4,28 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/gee-kul/orderflow/internal/event"
 )
 
 type fakeRepository struct {
-	ord        Order
-	saveErr    error
-	saveCalled bool
+	ord                 Order
+	saveErr             error
+	saveCalled          bool
+	event               event.Event
+	saveWithEventCalled bool
 }
 
 func (r *fakeRepository) Save(ctx context.Context, order Order) error {
 	r.ord = order
 	r.saveCalled = true
+	return r.saveErr
+}
+
+func (r *fakeRepository) SaveWithEvent(ctx context.Context, order Order, event event.Event) error {
+	r.ord = order
+	r.event = event
+	r.saveWithEventCalled = true
 	return r.saveErr
 }
 
@@ -24,7 +35,7 @@ func (r *fakeRepository) FindByID(ctx context.Context, id string) (Order, error)
 
 func TestOrderServiceCreateOrderSuccess(t *testing.T) {
 	rep := new(fakeRepository)
-	service := NewOrderService(rep)
+	service := NewOrderService(rep, rep)
 
 	item := OrderItem{ProductID: "order-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
 	input := CreateOrderInput{Currency: "RUB", Items: []OrderItem{item}}
@@ -48,13 +59,29 @@ func TestOrderServiceCreateOrderSuccess(t *testing.T) {
 	if order.ID == "" {
 		t.Error("айди не может быть пустым")
 	}
+
+	if rep.saveWithEventCalled == false {
+		t.Fatal("saveWithEventCalled должен быть true")
+	}
+
+	if rep.saveCalled == true {
+		t.Fatal("saveCalled должен быть false")
+	}
+
+	if rep.event.AggregateID != order.ID {
+		t.Errorf("айди ивента не совпало, должно быть %v", order.ID)
+	}
+
+	if rep.event.EventType != "order.created" {
+		t.Errorf("event_type не order.created а %v", rep.event.EventType)
+	}
 }
 
 func TestOrderServiceCreateOrderSaveError(t *testing.T) {
 	expErr := errors.New("ошибка сохранения")
 
 	rep := &fakeRepository{saveErr: expErr}
-	service := NewOrderService(rep)
+	service := NewOrderService(rep, rep)
 
 	item := OrderItem{ProductID: "order-2", Name: "bruh", UnitPrice: 100500, Quantity: 1}
 	input := CreateOrderInput{Currency: "RUB", Items: []OrderItem{item}}
@@ -66,11 +93,15 @@ func TestOrderServiceCreateOrderSaveError(t *testing.T) {
 	if !errors.Is(err, expErr) {
 		t.Errorf("ожидаемая и полученная ошибки не совпали: %v", err)
 	}
+
+	if rep.saveWithEventCalled == false {
+		t.Fatal("ошибка возвращается не из saveWithEventCalled")
+	}
 }
 
 func TestOrderServiceCreateOrderValidationError(t *testing.T) {
 	rep := &fakeRepository{}
-	service := NewOrderService(rep)
+	service := NewOrderService(rep, rep)
 
 	item := OrderItem{ProductID: "order-2", Name: "bruh", UnitPrice: 100500, Quantity: 1}
 	input := CreateOrderInput{Currency: "RUB", Items: []OrderItem{item}}
@@ -82,7 +113,8 @@ func TestOrderServiceCreateOrderValidationError(t *testing.T) {
 	if !errors.Is(err, ErrCustomerIDRequired) {
 		t.Errorf("ожидаемая и полученная ошибки не совпали: %v", err)
 	}
-	if rep.saveCalled {
-		t.Error("репозиторий не должен вызываться при некор данных")
+
+	if rep.saveCalled != false || rep.saveWithEventCalled != false {
+		t.Fatal("оба флага save должны быть false")
 	}
 }

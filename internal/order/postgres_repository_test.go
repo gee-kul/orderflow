@@ -28,7 +28,7 @@ func newTestPostgresRepository(t *testing.T) *PostgresOrderRepository {
 	if err != nil {
 		t.Fatalf("ошибка пинга: %v", err)
 	}
-	_, err = pool.Exec(ctx, `TRUNCATE TABLE order_items, orders`)
+	_, err = pool.Exec(ctx, `TRUNCATE TABLE order_items, orders, outbox_events`)
 	if err != nil {
 		t.Fatalf("очистка не удалась: %v", err)
 	}
@@ -143,5 +143,87 @@ func TestPostgresOrderRepositoryRepeatSave(t *testing.T) {
 	}
 	if !reflect.DeepEqual(orderNew.Items, orderByID.Items) {
 		t.Fatalf("items не совпадают, должно быть:%v, вывелось:%v", orderNew.Items, orderByID.Items)
+	}
+}
+
+func TestPostgresOrderRepositorySaveWithEvent(t *testing.T) {
+	repo := newTestPostgresRepository(t)
+
+	item1 := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	item2 := OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
+	order := Order{ID: "order-1", CustomerID: "cust", Items: []OrderItem{item1, item2}, Status: StatusCreated,
+		TotalAmount: item1.UnitPrice*int64(item1.Quantity) + item2.UnitPrice*int64(item2.Quantity),
+		Currency:    "RUB", CreatedAt: time.Date(2026, 12, 1, 1, 1, 1, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 12, 1, 1, 2, 1, 0, time.UTC)}
+
+	evt, err := NewOrderCreatedEvent(order)
+	if err != nil {
+		t.Fatalf("ошибка создания нового ивента %v", err)
+	}
+
+	err = repo.SaveWithEvent(t.Context(), order, evt)
+	if err != nil {
+		t.Fatalf("ошибка сохранения заказа с ивентом:%v", err)
+	}
+
+	_, err = repo.FindByID(t.Context(), order.ID)
+	if err != nil {
+		t.Fatalf("не удалось найти заказ по айди:%v", err)
+	}
+
+	query := `SELECT aggregate_type, aggregate_id, event_type, published_at
+	FROM outbox_events WHERE id = $1`
+
+	row := repo.pool.QueryRow(t.Context(), query, evt.ID)
+	var aggregateType string
+	var aggregateID string
+	var eventType string
+	var publishedAt *time.Time
+	err = row.Scan(&aggregateType, &aggregateID, &eventType, &publishedAt)
+	if err != nil {
+		t.Fatalf("ошибка скана %v", err)
+	}
+
+	if evt.AggregateType != aggregateType {
+		t.Errorf("aggregate_type  не совпало, должно быть %v", evt.AggregateType)
+	}
+
+	if evt.AggregateID != aggregateID {
+		t.Errorf("aggregate_id  не совпало, должно быть %v", evt.AggregateID)
+	}
+
+	if evt.EventType != eventType {
+		t.Errorf("event_type  не совпало, должно быть %v", evt.EventType)
+	}
+
+	if publishedAt != nil {
+		t.Error("published_at должно быть nil")
+	}
+}
+
+func TestPostgresOrderRepositorySaveWithEventRollback(t *testing.T) {
+	repo := newTestPostgresRepository(t)
+
+	item1 := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	order := Order{ID: "order-1", CustomerID: "cust", Items: []OrderItem{item1}, Status: StatusCreated,
+		TotalAmount: item1.UnitPrice * int64(item1.Quantity),
+		Currency:    "RUB", CreatedAt: time.Date(2026, 12, 1, 1, 1, 1, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 12, 1, 1, 2, 1, 0, time.UTC)}
+
+	evt, err := NewOrderCreatedEvent(order)
+	if err != nil {
+		t.Fatalf("ошибка создания нового ивента %v", err)
+	}
+
+	evt.ID = "incorrect id"
+
+	err = repo.SaveWithEvent(t.Context(), order, evt)
+	if err == nil {
+		t.Fatalf("должна быть ошибка сохранения заказа с неверным айди:%v", err)
+	}
+
+	_, err = repo.FindByID(t.Context(), order.ID)
+	if !errors.Is(err, ErrOrderNotFound) {
+		t.Fatalf("должна быть ошибка заказ не найден, а пришла ошибка :%v", err)
 	}
 }

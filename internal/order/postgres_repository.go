@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gee-kul/orderflow/internal/event"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,19 +20,14 @@ func NewPostgresOrderRepository(pool *pgxpool.Pool) *PostgresOrderRepository {
 	return &repo
 }
 
-func (p *PostgresOrderRepository) Save(ctx context.Context, order Order) error {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("ошибка открытия транзакции :%w", err)
-	}
-	defer tx.Rollback(ctx)
+func saveOrderInTx(ctx context.Context, tx pgx.Tx, order Order) error {
 
 	query := `INSERT INTO orders(id, customer_id, status, total_amount, currency, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id)
 	DO UPDATE SET customer_id = EXCLUDED.customer_id, status = EXCLUDED.status,
 	total_amount = EXCLUDED.total_amount, currency = EXCLUDED.currency,
 	created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at`
-	_, err = tx.Exec(ctx, query, order.ID, order.CustomerID, order.Status, order.TotalAmount,
+	_, err := tx.Exec(ctx, query, order.ID, order.CustomerID, order.Status, order.TotalAmount,
 		order.Currency, order.CreatedAt, order.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("не удалось сохранить заказ: %w", err)
@@ -52,7 +48,48 @@ func (p *PostgresOrderRepository) Save(ctx context.Context, order Order) error {
 			return fmt.Errorf("ошибка на %d позиции: %w", pos, err)
 		}
 	}
+	return nil
+}
 
+func (p *PostgresOrderRepository) Save(ctx context.Context, order Order) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("ошибка открытия транзакции :%w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	err = saveOrderInTx(ctx, tx, order)
+	if err != nil {
+		return fmt.Errorf("не удалось сохранить заказ в транзакции %w", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("ошибка комита: %w", err)
+	}
+	return nil
+}
+
+func (p *PostgresOrderRepository) SaveWithEvent(ctx context.Context, order Order, evt event.Event) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("ошибка открытия транзакции :%w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	err = saveOrderInTx(ctx, tx, order)
+	if err != nil {
+		return fmt.Errorf("не удалось сохранить заказ в транзакции %w", err)
+	}
+
+	query := `INSERT INTO outbox_events(id, aggregate_type, aggregate_id, event_type, payload, created_at, published_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+	_, err = tx.Exec(ctx, query, evt.ID, evt.AggregateType, evt.AggregateID, evt.EventType,
+		evt.Payload, evt.CreatedAt, evt.PublishedAt)
+	if err != nil {
+		return fmt.Errorf("не удалось сохранить outbox-событие: %w", err)
+	}
 	err = tx.Commit(ctx)
 	if err != nil {
 		return fmt.Errorf("ошибка комита: %w", err)
