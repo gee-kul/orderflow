@@ -1,4 +1,4 @@
-package order
+package postgres
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gee-kul/orderflow/internal/event"
+	orderdomain "github.com/gee-kul/orderflow/internal/order"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -20,7 +21,7 @@ func NewPostgresOrderRepository(pool *pgxpool.Pool) *PostgresOrderRepository {
 	return &repo
 }
 
-func saveOrderInTx(ctx context.Context, tx pgx.Tx, order Order) error {
+func saveOrderInTx(ctx context.Context, tx pgx.Tx, order orderdomain.Order) error {
 
 	query := `INSERT INTO orders(id, customer_id, status, total_amount, currency, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id)
@@ -51,7 +52,7 @@ func saveOrderInTx(ctx context.Context, tx pgx.Tx, order Order) error {
 	return nil
 }
 
-func (p *PostgresOrderRepository) Save(ctx context.Context, order Order) error {
+func (p *PostgresOrderRepository) Save(ctx context.Context, order orderdomain.Order) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("ошибка открытия транзакции :%w", err)
@@ -70,7 +71,7 @@ func (p *PostgresOrderRepository) Save(ctx context.Context, order Order) error {
 	return nil
 }
 
-func (p *PostgresOrderRepository) SaveWithEvent(ctx context.Context, order Order, evt event.Event) error {
+func (p *PostgresOrderRepository) SaveWithEvent(ctx context.Context, order orderdomain.Order, evt event.Event) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("ошибка открытия транзакции :%w", err)
@@ -97,14 +98,14 @@ func (p *PostgresOrderRepository) SaveWithEvent(ctx context.Context, order Order
 	return nil
 }
 
-func (p *PostgresOrderRepository) FindByID(ctx context.Context, id string) (Order, error) {
+func (p *PostgresOrderRepository) FindByID(ctx context.Context, id string) (orderdomain.Order, error) {
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return Order{}, fmt.Errorf("ошибка открытия транзакции: %w", err)
+		return orderdomain.Order{}, fmt.Errorf("ошибка открытия транзакции: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	order := Order{}
+	order := orderdomain.Order{}
 
 	query := `SELECT id, customer_id, status, total_amount,
 	currency, created_at, updated_at FROM orders WHERE id = $1`
@@ -113,35 +114,35 @@ func (p *PostgresOrderRepository) FindByID(ctx context.Context, id string) (Orde
 	err = row.Scan(&order.ID, &order.CustomerID, &order.Status, &order.TotalAmount,
 		&order.Currency, &order.CreatedAt, &order.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Order{}, ErrOrderNotFound
+		return orderdomain.Order{}, orderdomain.ErrOrderNotFound
 	}
 	if err != nil {
-		return Order{}, fmt.Errorf("ошибка при сканировании столбцов: %w", err)
+		return orderdomain.Order{}, fmt.Errorf("ошибка при сканировании столбцов: %w", err)
 	}
 	query2 := `SELECT product_id, name, unit_price, quantity FROM order_items
 	WHERE order_id = $1 ORDER BY position ASC`
 	rows, err := tx.Query(ctx, query2, order.ID)
 	if err != nil {
-		return Order{}, fmt.Errorf("не удалось получить позиции заказа: %w", err)
+		return orderdomain.Order{}, fmt.Errorf("не удалось получить позиции заказа: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		item := OrderItem{}
+		item := orderdomain.OrderItem{}
 		err = rows.Scan(&item.ProductID, &item.Name, &item.UnitPrice, &item.Quantity)
 		if err != nil {
-			return Order{}, fmt.Errorf("не удалось получить позиции заказа:%w", err)
+			return orderdomain.Order{}, fmt.Errorf("не удалось получить позиции заказа:%w", err)
 		}
 		order.Items = append(order.Items, item)
 	}
 	err = rows.Err()
 	if err != nil {
-		return Order{}, fmt.Errorf("ошибка чтения позиций заказа:%w", err)
+		return orderdomain.Order{}, fmt.Errorf("ошибка чтения позиций заказа:%w", err)
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		return Order{}, fmt.Errorf("ошибка комита: %w", err)
+		return orderdomain.Order{}, fmt.Errorf("ошибка комита: %w", err)
 	}
 	return order, nil
 }

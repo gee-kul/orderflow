@@ -1,4 +1,4 @@
-package order
+package memory
 
 import (
 	"context"
@@ -6,12 +6,14 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+
+	orderdomain "github.com/gee-kul/orderflow/internal/order"
 )
 
 func TestMemoryOrderRepositorySaveAndFindByID(t *testing.T) {
 	repository := NewMemoryOrderRepository()
 
-	order := Order{ID: "order-1"}
+	order := orderdomain.Order{ID: "order-1"}
 
 	err := repository.Save(context.Background(), order)
 	if err != nil {
@@ -30,7 +32,7 @@ func TestMemoryOrderRepositoryFindByIDNotFound(t *testing.T) {
 	repository := NewMemoryOrderRepository()
 
 	order, err := repository.FindByID(context.Background(), "unknown-order")
-	if !errors.Is(err, ErrOrderNotFound) {
+	if !errors.Is(err, orderdomain.ErrOrderNotFound) {
 		t.Errorf("ошибки должны были совпасть: %v", err)
 	}
 	if order.ID != "" {
@@ -46,7 +48,7 @@ func TestMemoryOrderRepositoryConcurrentSave(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			order := Order{ID: "order-" + strconv.Itoa(i)}
+			order := orderdomain.Order{ID: "order-" + strconv.Itoa(i)}
 			err := repository.Save(context.Background(), order)
 			if err != nil {
 				t.Errorf("не удалось сохранить заказ %s:%v", order.ID, err)
@@ -69,7 +71,7 @@ func TestMemoryOrderRepositoryConcurrentSave(t *testing.T) {
 func TestSaveWithCancelledContext(t *testing.T) {
 	repository := NewMemoryOrderRepository()
 
-	order := Order{ID: "order-1"}
+	order := orderdomain.Order{ID: "order-1"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -78,14 +80,14 @@ func TestSaveWithCancelledContext(t *testing.T) {
 		t.Errorf("ожидаемая и полученная ошибки не совпали: %v", err2)
 	}
 	_, err := repository.FindByID(context.Background(), order.ID)
-	if !errors.Is(err, ErrOrderNotFound) {
+	if !errors.Is(err, orderdomain.ErrOrderNotFound) {
 		t.Errorf("отмененная операция сохранилась %v", err)
 	}
 }
 
 func TestFindByIDWithCancelledContext(t *testing.T) {
 	repository := NewMemoryOrderRepository()
-	order := Order{ID: "order-1"}
+	order := orderdomain.Order{ID: "order-1"}
 	err := repository.Save(context.Background(), order)
 	if err != nil {
 		t.Fatalf("save не должен был вернуть ошибку: %v", err)
@@ -101,8 +103,8 @@ func TestFindByIDWithCancelledContext(t *testing.T) {
 
 func TestDefensiveCopyingForSave(t *testing.T) {
 	repository := NewMemoryOrderRepository()
-	item := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
-	order := Order{ID: "order-1", Items: []OrderItem{item}}
+	item := orderdomain.OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	order := orderdomain.Order{ID: "order-1", Items: []orderdomain.OrderItem{item}}
 
 	err := repository.Save(context.Background(), order)
 	if err != nil {
@@ -122,8 +124,8 @@ func TestDefensiveCopyingForSave(t *testing.T) {
 
 func TestDefensiveCopyingForFindByID(t *testing.T) {
 	repository := NewMemoryOrderRepository()
-	item := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
-	order := Order{ID: "order-1", Items: []OrderItem{item}}
+	item := orderdomain.OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	order := orderdomain.Order{ID: "order-1", Items: []orderdomain.OrderItem{item}}
 
 	err := repository.Save(context.Background(), order)
 	if err != nil {
