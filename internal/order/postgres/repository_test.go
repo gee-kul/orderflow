@@ -1,4 +1,4 @@
-package order
+package postgres
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	orderdomain "github.com/gee-kul/orderflow/internal/order"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,9 +40,9 @@ func newTestPostgresRepository(t *testing.T) *PostgresOrderRepository {
 func TestPostgresOrderRepositorySaveAndRead(t *testing.T) {
 	repo := newTestPostgresRepository(t)
 
-	item1 := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
-	item2 := OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
-	order := Order{ID: "order-1", CustomerID: "cust", Items: []OrderItem{item1, item2}, Status: StatusCreated,
+	item1 := orderdomain.OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	item2 := orderdomain.OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
+	order := orderdomain.Order{ID: "order-1", CustomerID: "cust", Items: []orderdomain.OrderItem{item1, item2}, Status: orderdomain.StatusCreated,
 		TotalAmount: item1.UnitPrice*int64(item1.Quantity) + item2.UnitPrice*int64(item2.Quantity),
 		Currency:    "RUB", CreatedAt: time.Date(2026, 12, 1, 1, 1, 1, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 12, 1, 1, 2, 1, 0, time.UTC)}
@@ -87,7 +88,7 @@ func TestPostgresOrderRepositoryNotExistID(t *testing.T) {
 	if err == nil {
 		t.Fatal("должна была вернутся ошибка")
 	}
-	if !errors.Is(err, ErrOrderNotFound) {
+	if !errors.Is(err, orderdomain.ErrOrderNotFound) {
 		t.Fatalf("неожиданная ошибка:%v", err)
 	}
 }
@@ -95,10 +96,10 @@ func TestPostgresOrderRepositoryNotExistID(t *testing.T) {
 func TestPostgresOrderRepositoryRepeatSave(t *testing.T) {
 	repo := newTestPostgresRepository(t)
 
-	item1 := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
-	item2 := OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
-	item3 := OrderItem{ProductID: "product-3", Name: "br", UnitPrice: 50000, Quantity: 3}
-	order := Order{ID: "order-1", CustomerID: "cust", Items: []OrderItem{item1, item2, item3}, Status: StatusCreated,
+	item1 := orderdomain.OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	item2 := orderdomain.OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
+	item3 := orderdomain.OrderItem{ProductID: "product-3", Name: "br", UnitPrice: 50000, Quantity: 3}
+	order := orderdomain.Order{ID: "order-1", CustomerID: "cust", Items: []orderdomain.OrderItem{item1, item2, item3}, Status: orderdomain.StatusCreated,
 		TotalAmount: item1.UnitPrice*int64(item1.Quantity) + item2.UnitPrice*int64(item2.Quantity) + item3.UnitPrice*int64(item3.Quantity),
 		Currency:    "RUB", CreatedAt: time.Date(2026, 12, 1, 1, 1, 1, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 12, 1, 1, 2, 1, 0, time.UTC)}
@@ -108,7 +109,7 @@ func TestPostgresOrderRepositoryRepeatSave(t *testing.T) {
 		t.Fatalf("ошибка сохранения заказа:%v", err)
 	}
 
-	orderNew := Order{ID: "order-1", CustomerID: "cust-new", Items: []OrderItem{item2, item1}, Status: StatusProcessing,
+	orderNew := orderdomain.Order{ID: "order-1", CustomerID: "cust-new", Items: []orderdomain.OrderItem{item2, item1}, Status: orderdomain.StatusProcessing,
 		TotalAmount: item1.UnitPrice*int64(item1.Quantity) + item2.UnitPrice*int64(item2.Quantity),
 		Currency:    "USD", CreatedAt: time.Date(2026, 12, 1, 2, 1, 1, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 12, 1, 2, 2, 1, 0, time.UTC)}
@@ -149,14 +150,14 @@ func TestPostgresOrderRepositoryRepeatSave(t *testing.T) {
 func TestPostgresOrderRepositorySaveWithEvent(t *testing.T) {
 	repo := newTestPostgresRepository(t)
 
-	item1 := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
-	item2 := OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
-	order := Order{ID: "order-1", CustomerID: "cust", Items: []OrderItem{item1, item2}, Status: StatusCreated,
+	item1 := orderdomain.OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	item2 := orderdomain.OrderItem{ProductID: "product-2", Name: "bru", UnitPrice: 100000, Quantity: 2}
+	order := orderdomain.Order{ID: "order-1", CustomerID: "cust", Items: []orderdomain.OrderItem{item1, item2}, Status: orderdomain.StatusCreated,
 		TotalAmount: item1.UnitPrice*int64(item1.Quantity) + item2.UnitPrice*int64(item2.Quantity),
 		Currency:    "RUB", CreatedAt: time.Date(2026, 12, 1, 1, 1, 1, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 12, 1, 1, 2, 1, 0, time.UTC)}
 
-	evt, err := NewOrderCreatedEvent(order)
+	evt, err := orderdomain.NewOrderCreatedEvent(order)
 	if err != nil {
 		t.Fatalf("ошибка создания нового ивента %v", err)
 	}
@@ -204,13 +205,13 @@ func TestPostgresOrderRepositorySaveWithEvent(t *testing.T) {
 func TestPostgresOrderRepositorySaveWithEventRollback(t *testing.T) {
 	repo := newTestPostgresRepository(t)
 
-	item1 := OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
-	order := Order{ID: "order-1", CustomerID: "cust", Items: []OrderItem{item1}, Status: StatusCreated,
+	item1 := orderdomain.OrderItem{ProductID: "product-1", Name: "bruh", UnitPrice: 100500, Quantity: 1}
+	order := orderdomain.Order{ID: "order-1", CustomerID: "cust", Items: []orderdomain.OrderItem{item1}, Status: orderdomain.StatusCreated,
 		TotalAmount: item1.UnitPrice * int64(item1.Quantity),
 		Currency:    "RUB", CreatedAt: time.Date(2026, 12, 1, 1, 1, 1, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 12, 1, 1, 2, 1, 0, time.UTC)}
 
-	evt, err := NewOrderCreatedEvent(order)
+	evt, err := orderdomain.NewOrderCreatedEvent(order)
 	if err != nil {
 		t.Fatalf("ошибка создания нового ивента %v", err)
 	}
@@ -223,7 +224,7 @@ func TestPostgresOrderRepositorySaveWithEventRollback(t *testing.T) {
 	}
 
 	_, err = repo.FindByID(t.Context(), order.ID)
-	if !errors.Is(err, ErrOrderNotFound) {
+	if !errors.Is(err, orderdomain.ErrOrderNotFound) {
 		t.Fatalf("должна быть ошибка заказ не найден, а пришла ошибка :%v", err)
 	}
 }
