@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/gee-kul/orderflow/internal/event"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -14,15 +13,6 @@ var (
 	ErrBrokersRequired = errors.New("brokers required")
 	ErrTopicRequired   = errors.New("topic required")
 )
-
-type message struct {
-	EventID       string          `json:"event_id"`
-	AggregateType string          `json:"aggregate_type"`
-	AggregateID   string          `json:"aggregate_id"`
-	EventType     string          `json:"event_type"`
-	Payload       json.RawMessage `json:"payload"`
-	CreatedAt     time.Time       `json:"created_at"`
-}
 
 type Publisher struct {
 	client *kgo.Client
@@ -55,9 +45,7 @@ func NewPublisher(brokers []string, topic string) (*Publisher, error) {
 }
 
 func (p *Publisher) Publish(ctx context.Context, evt event.Event) error {
-	msg := message{EventID: evt.ID, AggregateType: evt.AggregateType,
-		AggregateID: evt.AggregateID, EventType: evt.EventType, Payload: evt.Payload,
-		CreatedAt: evt.CreatedAt}
+	msg := event.NewEnvelope(evt)
 
 	messageFromMarshal, err := json.Marshal(msg)
 	if err != nil {
