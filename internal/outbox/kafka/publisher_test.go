@@ -128,7 +128,7 @@ func TestPublisherPublishIntegration(t *testing.T) {
 		for !iter.Done() {
 			record := iter.Next()
 			if string(record.Key) == evt.AggregateID {
-				var message message
+				var message event.Envelope
 				err = json.Unmarshal(record.Value, &message)
 				if err != nil {
 					t.Fatalf("error from unmarshal %v", err)
