@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/gee-kul/orderflow/internal/consumer/kafka"
+	"github.com/gee-kul/orderflow/internal/consumer/retry"
 	"github.com/gee-kul/orderflow/internal/orderstats/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,10 +34,14 @@ func run() error {
 		return fmt.Errorf("error from ping pool: %w", err)
 	}
 
-	handler := postgres.NewHandler(pool)
+	postgresHandler := postgres.NewHandler(pool)
+	hand, err := retry.NewHandler(postgresHandler, cfg.maxAttempts, cfg.initialBackoff, cfg.maxBackoff)
+	if err != nil {
+		return fmt.Errorf("error from NewHandler: %w", err)
+	}
 
 	consumer, err := kafka.NewConsumer(cfg.kafkaBrokers, cfg.kafkaTopic,
-		cfg.kafkaGroup, handler)
+		cfg.kafkaGroup, hand)
 	if err != nil {
 		return fmt.Errorf("error from newConsumer: %w", err)
 	}
